@@ -22,6 +22,16 @@ describe('#copyTpl()', () => {
     expect(fs.read(newPath)).toBe('new content' + os.EOL);
   });
 
+  it('copy file and process contents as underscore template', async () => {
+    const filepath = getFixture('file-tpl.txt');
+    expect(await fs.copyTplAsync(filepath, null, { name: 'new content' })).toMatchObject([
+      {
+        path: filepath,
+        contents: Buffer.from('new content' + os.EOL),
+      },
+    ]);
+  });
+
   it('fallback to memory file', async () => {
     const filepath = getFixture('file-tpl.txt');
     await fs.copyAsync(filepath, filepath + '.mem');

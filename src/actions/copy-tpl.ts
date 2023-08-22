@@ -13,7 +13,6 @@ export function _processTpl(
   }: {
     contents: string | Buffer;
     filename: string;
-    destination?: string;
     context?: Data;
     tplSettings?: Options;
   }
@@ -33,7 +32,7 @@ export function _processTpl(
 export function copyTpl(
   this: MemFsEditor,
   from: string | string[],
-  to: string,
+  to: string | null,
   context?: Data,
   tplSettings?: Options,
   options?: CopySingleOptions
@@ -41,7 +40,7 @@ export function copyTpl(
   context = context || {};
   tplSettings = tplSettings || {};
 
-  this.copy(
+  return this.copy(
     from,
     to,
     {

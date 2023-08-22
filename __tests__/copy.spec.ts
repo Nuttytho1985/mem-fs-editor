@@ -28,6 +28,12 @@ describe('#copy()', () => {
     expect(fs.store.get(newPath).state).toBe('modified');
   });
 
+  it('return file without a destination', () => {
+    const filepath = getFixture('file-a.txt');
+    const initialContents = fs.read(filepath);
+    expect(fs.copy(filepath, null)).toMatchObject([{ path: filepath, contents: Buffer.from(initialContents!) }]);
+  });
+
   describe('using append option', () => {
     beforeEach(() => {
       sinon.spy(fs, 'append');
@@ -76,6 +82,23 @@ describe('#copy()', () => {
     expect(fs.read(path.join(destDir, 'file-b.txt'))).toBe('b');
   });
 
+  it('return directory not commited to disk', () => {
+    const sourceDir = getFixture('../../test/foo');
+    fs.write(path.join(sourceDir, 'file-a.txt'), 'a');
+    fs.write(path.join(sourceDir, 'file-b.txt'), 'b');
+
+    expect(fs.copy(path.join(sourceDir, '**'), null)).toMatchObject([
+      {
+        path: path.join(sourceDir, 'file-a.txt'),
+        contents: Buffer.from('a'),
+      },
+      {
+        path: path.join(sourceDir, 'file-b.txt'),
+        contents: Buffer.from('b'),
+      },
+    ]);
+  });
+
   it('throws when trying to copy from a non-existing file', () => {
     const filepath = getFixture('does-not-exits');
     const newPath = getFixture('../../test/new/path/file.txt');
@@ -95,6 +118,26 @@ describe('#copy()', () => {
       },
     });
     expect(fs.read(newPath)).toBe(contents);
+  });
+
+  it('return file and process contents', () => {
+    const filepath = getFixture('file-a.txt');
+    const initialContents = fs.read(filepath);
+    const contents = 'some processed contents';
+    expect(
+      fs.copy(filepath, null, {
+        process(contentsArg) {
+          expect(contentsArg).toBeInstanceOf(Buffer);
+          expect(contentsArg.toString()).toEqual(initialContents);
+          return contents;
+        },
+      })
+    ).toMatchObject([
+      {
+        path: filepath,
+        contents: Buffer.from(contents),
+      },
+    ]);
   });
 
   it('copy by directory', () => {

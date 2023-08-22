@@ -7,7 +7,7 @@ import { CopyAsyncOptions } from './copy-async.js';
 export default async function (
   this: MemFsEditor,
   from: string | string[],
-  to: string,
+  to: string | null,
   context?: Data,
   tplSettings?: Options,
   options?: CopyAsyncOptions
@@ -15,7 +15,7 @@ export default async function (
   context = context || {};
   tplSettings = tplSettings || {};
 
-  await this.copyAsync(
+  return await this.copyAsync(
     from,
     to,
     {
@@ -28,11 +28,10 @@ export default async function (
 
         return renderFile(filename, context, tplSettings);
       },
-      process: (contents, filename, destination) =>
+      process: (contents, filename) =>
         this._processTpl({
           contents,
           filename,
-          destination,
           context,
           tplSettings,
         }),

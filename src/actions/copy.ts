@@ -10,10 +10,10 @@ import type { MemFsEditor } from '../index.js';
 import { getCommonPath, globify, render } from '../util.js';
 
 function applyProcessingFunc(
-  process: (contents: string | Buffer, filepath: string, destination: string) => string | Buffer,
+  process: (contents: string | Buffer, filepath: string, destination: string | null) => string | Buffer,
   contents: string | Buffer,
   filename: string,
-  destination: string
+  destination: string | null
 ) {
   const output = process(contents, filename, destination);
   return Buffer.isBuffer(output) ? output : Buffer.from(output);
@@ -30,12 +30,12 @@ export type CopyOptions = CopySingleOptions & {
 export function copy(
   this: MemFsEditor,
   from: string | string[],
-  to: string,
+  to: string | null,
   options?: CopyOptions,
   context?: Data,
   tplSettings?: Options
 ) {
-  to = path.resolve(to);
+  to = to ? path.resolve(to) : to;
   options = options || {};
 
   let files: string[] = [];
@@ -61,16 +61,17 @@ export function copy(
     files = diskFiles.concat(storeFiles);
   }
 
-  let generateDestination: (string) => string = () => to;
+  let generateDestination: (string) => string | null = () => to;
   if (Array.isArray(from) || !this.exists(from) || (isDynamicPattern(normalize(from)) && !options.noGlob)) {
     assert(
-      !this.exists(to) || fs.statSync(to).isDirectory(),
+      !to || !this.exists(to) || fs.statSync(to).isDirectory(),
       'When copying multiple files, provide a directory as destination'
     );
 
     const processDestinationPath = options.processDestinationPath || ((path) => path);
     const root = options.fromBasePath || getCommonPath(from);
     generateDestination = (filepath) => {
+      if (!to) return to;
       const toFile = path.relative(root, filepath);
       return processDestinationPath(path.join(to, toFile));
     };
@@ -79,22 +80,25 @@ export function copy(
   // Sanity checks: Makes sure we copy at least one file.
   assert(options.ignoreNoMatch || files.length > 0, 'Trying to copy from a source that does not exist: ' + from);
 
-  files.forEach((file) => {
+  const rendered = files.map((file) => {
     let toFile = generateDestination(file);
-    if (context) {
+    if (context && toFile) {
       toFile = render(toFile, context, { ...tplSettings, cache: false });
     }
 
-    this._copySingle(file, toFile, options);
+    return this._copySingle(file, toFile, options);
   });
+  if (rendered.find(Boolean)) {
+    return rendered;
+  }
 }
 
 export type CopySingleOptions = {
   append?: boolean;
-  process?: (contents: string | Buffer, filepath: string, destination: string) => string | Buffer;
+  process?: (contents: string | Buffer, filepath: string, destination: string | null) => string | Buffer;
 };
 
-export function _copySingle(this: MemFsEditor, from: string, to: string, options: CopySingleOptions = {}) {
+export function _copySingle(this: MemFsEditor, from: string, to: string | null, options: CopySingleOptions = {}) {
   assert(this.exists(from), 'Trying to copy from a source that does not exist: ' + from);
 
   const file = this.store.get(from);
@@ -103,8 +107,13 @@ export function _copySingle(this: MemFsEditor, from: string, to: string, options
   if (!contents) {
     throw new Error(`Cannot copy empty file ${from}`);
   }
+
   if (options.process) {
     contents = applyProcessingFunc(options.process, contents, file.path, to);
+  }
+
+  if (!to) {
+    return { path: from, contents };
   }
 
   if (options.append) {

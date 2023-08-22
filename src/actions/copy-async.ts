@@ -20,8 +20,8 @@ async function applyProcessingFileFunc(
   return Buffer.isBuffer(output) ? output : Buffer.from(output);
 }
 
-function renderFilepath(filepath, context, tplSettings) {
-  if (!context) {
+function renderFilepath(filepath: string | null, context, tplSettings) {
+  if (!context || !filepath) {
     return filepath;
   }
 
@@ -55,16 +55,16 @@ export type CopyAsyncOptions = CopySingleAsyncOptions & {
 export async function copyAsync(
   this: MemFsEditor,
   from: string | string[],
-  to: string,
+  to: string | null,
   options?: CopyAsyncOptions,
   context?: Data,
   tplSettings?: Options
 ) {
-  to = path.resolve(to);
+  to = to ? path.resolve(to) : to;
   options = options || {};
   const oneFile = await getOneFile(from);
   if (oneFile) {
-    return this._copySingleAsync(oneFile, renderFilepath(to, context, tplSettings), options);
+    return [await this._copySingleAsync(oneFile, renderFilepath(to, context, tplSettings), options)];
   }
 
   const fromGlob = globify(from);
@@ -83,16 +83,17 @@ export async function copyAsync(
     }
   });
 
-  let generateDestination: (string) => string = () => to;
+  let generateDestination: (string) => string | null = () => to;
   if (Array.isArray(from) || !this.exists(from) || isDynamicPattern(normalize(from))) {
     assert(
-      !this.exists(to) || fs.statSync(to).isDirectory(),
+      !to || !this.exists(to) || fs.statSync(to).isDirectory(),
       'When copying multiple files, provide a directory as destination'
     );
 
     const processDestinationPath = options.processDestinationPath || ((path) => path);
     const root = getCommonPath(from);
     generateDestination = (filepath) => {
+      if (!to) return to;
       const toFile = path.relative(root, filepath);
       return processDestinationPath(path.join(to, toFile));
     };
@@ -104,7 +105,7 @@ export async function copyAsync(
     'Trying to copy from a source that does not exist: ' + from
   );
 
-  await Promise.all([
+  const rendered = await Promise.all([
     ...diskFiles.map((file) =>
       this._copySingleAsync(file, renderFilepath(generateDestination(file), context, tplSettings), options)
     ),
@@ -112,6 +113,9 @@ export async function copyAsync(
       Promise.resolve(this._copySingle(file, renderFilepath(generateDestination(file), context, tplSettings), options))
     ),
   ]);
+  if (rendered.find(Boolean)) {
+    return rendered;
+  }
 }
 
 export type CopySingleAsyncOptions = AppendOptions &
@@ -123,7 +127,7 @@ export type CopySingleAsyncOptions = AppendOptions &
 export async function _copySingleAsync(
   this: MemFsEditor,
   from: string,
-  to: string,
+  to: string | null,
   options: CopySingleAsyncOptions = {}
 ) {
   if (!options.processFile) {
@@ -131,6 +135,10 @@ export async function _copySingleAsync(
   }
 
   const contents = await applyProcessingFileFunc.call(this, options.processFile, from);
+
+  if (!to) {
+    return { path: from, contents };
+  }
 
   if (options.append) {
     if (!this.store.existsInMemory) {

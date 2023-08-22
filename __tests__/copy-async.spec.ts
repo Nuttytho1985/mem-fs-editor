@@ -25,6 +25,17 @@ describe('#copyAsync()', () => {
     expect(fs.store.get(newPath).state).toBe('modified');
   });
 
+  it('return file', async () => {
+    const filepath = getFixture('file-a.txt');
+    const initialContents = fs.read(filepath);
+    expect(await fs.copyAsync(filepath, null)).toMatchObject([
+      {
+        path: filepath,
+        contents: Buffer.from(initialContents!),
+      },
+    ]);
+  });
+
   describe('using append option', () => {
     beforeEach(() => {
       sinon.spy(fs, 'append');
@@ -86,12 +97,30 @@ describe('#copyAsync()', () => {
     const contents = 'some processed contents';
     const newPath = getFixture('../../test/new/path/file.txt');
     await fs.copyAsync(filepath, newPath, {
-      processFile(filename) {
+      async processFile(filename) {
         expect(filename).toEqual(filepath);
         return contents;
       },
     });
     expect(fs.read(newPath)).toBe(contents);
+  });
+
+  it('process contents and return content', async () => {
+    const filepath = getFixture('file-a.txt');
+    const contents = 'some processed contents';
+    expect(
+      await fs.copyAsync(filepath, null, {
+        async processFile(filename) {
+          expect(filename).toEqual(filepath);
+          return contents;
+        },
+      })
+    ).toMatchObject([
+      {
+        path: filepath,
+        contents: Buffer.from(contents),
+      },
+    ]);
   });
 
   it('copy by directory', async () => {

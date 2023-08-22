@@ -23,6 +23,17 @@ describe('#copyTpl()', () => {
     expect(fs.read(newPath)).toBe('new content' + os.EOL);
   });
 
+  it('process contents and return file', () => {
+    const filepath = getFixture('file-tpl.txt');
+    const newPath = '/new/path/file.txt';
+    expect(fs.copyTpl(filepath, null, { name: 'new content' })).toMatchObject([
+      {
+        path: filepath,
+        contents: Buffer.from('new content' + os.EOL),
+      },
+    ]);
+  });
+
   it('allow setting custom template delimiters', () => {
     const filepath = getFixture('file-tpl-custom-delimiter.txt');
     const newPath = '/new/path/file.txt';
